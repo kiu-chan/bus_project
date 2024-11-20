@@ -1,9 +1,13 @@
+// MapComponent.js
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, useMap, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import axios from 'axios';
+import LocationMarker from './LocationMarker';
+import AdvancedSearch from './AdvancedSearch';
+import 'leaflet/dist/leaflet.css';
 
+// Cấu hình icon mặc định cho Leaflet
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -11,6 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Icon cho trạm bus
 const busStopIcon = L.icon({
   iconUrl: 'https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678111-map-marker-512.png',
   iconSize: [30, 30],
@@ -18,49 +23,41 @@ const busStopIcon = L.icon({
   popupAnchor: [0, -30]
 });
 
-const LocationMarker = () => {
-  const [position, setPosition] = useState(null);
-  const map = useMap();
+// Icon cho trạm đang chọn
+const selectedBusStopIcon = L.icon({
+  iconUrl: 'https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678111-map-marker-512.png',
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -40],
+  className: 'selected-station-marker' // Thêm class để style
+});
 
-  useEffect(() => {
-    const onLocationFound = (e) => {
-      setPosition(e.latlng);
-      map.flyTo(e.latlng, 16);
-    };
-
-    const onLocationError = (e) => {
-      console.log("Không thể lấy vị trí:", e.message);
-    };
-
-    map.on('locationfound', onLocationFound);
-    map.on('locationerror', onLocationError);
-
-    map.locate({ 
-      watch: true,
-      enableHighAccuracy: true 
-    });
-
-    return () => {
-      map.stopLocate();
-      map.off('locationfound', onLocationFound);
-      map.off('locationerror', onLocationError);
-    };
-  }, [map]);
-
-  return position === null ? null : (
-    <Marker position={position}>
-      <Popup>
-        <div className="font-sans">
-          <h3 className="font-bold">Vị trí của bạn</h3>
-          <p className="text-sm">Vĩ độ: {position.lat.toFixed(4)}</p>
-          <p className="text-sm">Kinh độ: {position.lng.toFixed(4)}</p>
-        </div>
-      </Popup>
-    </Marker>
-  );
+// Cấu hình các loại bản đồ
+const mapLayers = {
+  street: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    name: 'Bản đồ đường phố'
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+    name: 'Bản đồ vệ tinh'
+  },
+  terrain: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
+    name: 'Bản đồ địa hình'
+  },
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    name: 'Bản đồ tối'
+  }
 };
 
-const Map = () => {
+const MapComponent = () => {
+  // States
   const defaultPosition = [21.0285, 105.8542];
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeMap, setActiveMap] = useState('street');
@@ -69,34 +66,12 @@ const Map = () => {
   const [stationRoutes, setStationRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedRoute, setSelectedRoute] = useState(null);
-  const [routeStations, setRouteStations] = useState([]);
   const [routePath, setRoutePath] = useState(null);
+  const [routeStations, setRouteStations] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
 
-  const mapLayers = {
-    street: {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      name: 'Bản đồ đường phố'
-    },
-    satellite: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
-      name: 'Bản đồ vệ tinh'
-    },
-    terrain: {
-      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-      attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> contributors',
-      name: 'Bản đồ địa hình'
-    },
-    dark: {
-      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-      name: 'Bản đồ tối'
-    }
-  };
-
-  // Hàm lấy đường đi từ OSRM
+  // Lấy dữ liệu đường đi từ OSRM
   const getRoute = async (start, end) => {
     try {
       const response = await axios.get(
@@ -109,7 +84,7 @@ const Map = () => {
     }
   };
 
-  // Hàm tính toán đường đi hoàn chỉnh
+  // Tính toán đường đi hoàn chỉnh
   const calculateFullRoute = async (stations) => {
     if (stations.length < 2) return [];
 
@@ -125,11 +100,45 @@ const Map = () => {
     return fullPath;
   };
 
+  // Xử lý thay đổi loại bản đồ
   const handleMapChange = (mapKey) => {
     setActiveMap(mapKey);
     setShowDropdown(false);
   };
 
+  // Xử lý khi chọn trạm
+  const handleStationSelect = (station) => {
+    setSelectedStation(station);
+    setRoutePath(null);
+    setSelectedRoute(null);
+    setRouteInfo(null);
+    fetchStationRoutes(station);
+  };
+
+  // Xử lý khi chọn tuyến
+  const handleRouteSelect = async (routeId) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSelectedRoute(routeId);
+      
+      // Lấy thông tin tuyến
+      const routeResponse = await axios.get(`http://localhost:3001/api/bus-stations`);
+      const route = routeResponse.data.find(r => r.tuyen_id === routeId);
+      setRouteInfo(route);
+      
+      // Lấy các trạm trên tuyến
+      await fetchRouteStations(routeId);
+      
+    } catch (error) {
+      console.error('Lỗi khi tải thông tin tuyến:', error);
+      setError('Không thể tải thông tin tuyến. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Lấy danh sách các trạm trên tuyến
   const fetchRouteStations = async (routeId) => {
     try {
       setLoading(true);
@@ -144,17 +153,36 @@ const Map = () => {
 
       setRouteStations(sortedStations);
       
-      // Tính toán đường đi thực tế
+      // Tính toán đường đi
       const path = await calculateFullRoute(sortedStations);
       setRoutePath(path);
       
     } catch (error) {
       console.error('Error fetching route stations:', error);
+      setError('Không thể tải thông tin tuyến. Vui lòng thử lại sau.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Lấy danh sách các tuyến đi qua trạm
+  const fetchStationRoutes = async (station) => {
+    if (!station) return;
+
+    try {
+      setLoading(true);
+      const response = await axios.get(`http://localhost:3001/api/station-routes/${station.tram_id}`);
+      setStationRoutes(response.data);
+    } catch (error) {
+      console.error('Lỗi khi tải thông tin tuyến:', error);
+      setStationRoutes([]);
+      setError('Không thể tải thông tin tuyến. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch initial data
   useEffect(() => {
     const fetchBusStations = async () => {
       try {
@@ -179,25 +207,7 @@ const Map = () => {
     fetchBusStations();
   }, []);
 
-  useEffect(() => {
-    const fetchStationRoutes = async () => {
-      if (!selectedStation) return;
-
-      try {
-        setLoading(true);
-        const response = await axios.get(`http://localhost:3001/api/station-routes/${selectedStation.tram_id}`);
-        setStationRoutes(response.data);
-      } catch (error) {
-        console.error('Lỗi khi tải thông tin tuyến:', error);
-        setStationRoutes([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStationRoutes();
-  }, [selectedStation]);
-
+  // Handle dropdown close
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (showDropdown && !event.target.closest('.dropdown-container')) {
@@ -227,6 +237,12 @@ const Map = () => {
         />
 
         <LocationMarker />
+        
+        <AdvancedSearch 
+          busStations={busStations}
+          onStationSelect={handleStationSelect}
+          onRouteSelect={handleRouteSelect}
+        />
 
         {/* Hiển thị đường đi */}
         {routePath && (
@@ -243,12 +259,9 @@ const Map = () => {
           <Marker
             key={station.tram_id}
             position={station.coordinates}
-            icon={busStopIcon}
+            icon={selectedStation?.tram_id === station.tram_id ? selectedBusStopIcon : busStopIcon}
             eventHandlers={{
-              click: () => {
-                setSelectedStation(station);
-                setRoutePath(null); // Xóa đường đi cũ khi chọn trạm mới
-              },
+              click: () => handleStationSelect(station),
             }}
           >
             <Popup>
@@ -265,13 +278,20 @@ const Map = () => {
                         {stationRoutes.map(route => (
                           <li 
                             key={route.tuyen_id} 
-                            className="border-b pb-1 last:border-b-0 cursor-pointer hover:bg-blue-50 p-2 rounded"
-                            onClick={() => fetchRouteStations(route.tuyen_id)}
+                            className={`border-b pb-1 last:border-b-0 cursor-pointer hover:bg-blue-50 p-2 rounded ${
+                              selectedRoute === route.tuyen_id ? 'bg-blue-100' : ''
+                            }`}
+                            onClick={() => handleRouteSelect(route.tuyen_id)}
                           >
                             <span className="font-medium">{route.ten_tuyen}</span>
                             <div className="text-xs text-gray-600">
                               {route.diem_dau} → {route.diem_cuoi}
                             </div>
+                            {route.thoi_gian_hoat_dong && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Thời gian: {route.thoi_gian_hoat_dong}
+                              </div>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -283,7 +303,7 @@ const Map = () => {
           </Marker>
         ))}
 
-        {/* Dropdown cho loại bản đồ */}
+        {/* Dropdown chọn loại bản đồ */}
         <div className="absolute top-5 left-5 z-[1000]">
           <div className="relative dropdown-container">
             <button
@@ -318,17 +338,102 @@ const Map = () => {
             )}
           </div>
         </div>
+
+        {/* Route Info Panel */}
+        {routeInfo && (
+          <div className="absolute bottom-5 left-5 z-[1000] bg-white p-4 rounded-lg shadow-lg max-w-md">
+            <h3 className="font-bold text-lg mb-2">{routeInfo.ten_tuyen}</h3>
+            <div className="text-sm space-y-2">
+              <p><span className="font-medium">Điểm đầu:</span> {routeInfo.diem_dau}</p>
+              <p><span className="font-medium">Điểm cuối:</span> {routeInfo.diem_cuoi}</p>
+              {routeInfo.thoi_gian_hoat_dong && (
+                <p><span className="font-medium">Thời gian hoạt động:</span> {routeInfo.thoi_gian_hoat_dong}</p>
+              )}
+              
+              {routeStations.length > 0 && (
+                <div className="mt-3">
+                  <p className="font-medium mb-2">Danh sách các trạm trên tuyến:</p>
+                  <div className="max-h-40 overflow-y-auto">
+                    {routeStations.map((station, index) => (
+                      <div 
+                        key={station.tram_id}
+                        className={`p-2 ${index < routeStations.length - 1 ? 'border-b' : ''} 
+                          ${selectedStation?.tram_id === station.tram_id ? 'bg-blue-50' : ''}`}
+                      >
+                        <div className="font-medium">{station.ten_tram}</div>
+                        <div className="text-xs text-gray-500">Thứ tự: {station.thu_tu_tram}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <button
+                onClick={() => {
+                  setRouteInfo(null);
+                  setRoutePath(null);
+                  setSelectedRoute(null);
+                  setRouteStations([]);
+                }}
+                className="mt-3 w-full px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
+              >
+                Đóng thông tin tuyến
+              </button>
+            </div>
+          </div>
+        )}
       </MapContainer>
 
+      {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1001]">
-          <div className="bg-white p-4 rounded-lg shadow-lg">
-            Đang tải...
+          <div className="bg-white p-6 rounded-lg shadow-lg">
+            <div className="flex items-center space-x-3">
+              <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span className="text-gray-700">Đang tải...</span>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Error message */}
+      {error && (
+        <div className="absolute top-5 left-1/2 transform -translate-x-1/2 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-lg z-[1001] max-w-md">
+          <div className="flex items-center">
+            <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+            </svg>
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="absolute top-1 right-1 text-red-700 hover:text-red-900"
+          >
+            <svg className="h-4 w-4" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+              <path d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* CSS cho selected station marker */}
+      <style jsx global>{`
+        .selected-station-marker {
+          filter: hue-rotate(120deg) saturate(1.5);
+          transform-origin: bottom center;
+          animation: bounce 0.5s ease infinite alternate;
+        }
+        
+        @keyframes bounce {
+          from { transform: translateY(0); }
+          to { transform: translateY(-8px); }
+        }
+      `}</style>
     </div>
   );
 };
 
-export default Map;
+export default MapComponent;
