@@ -1,8 +1,9 @@
 // MapComponent.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import axios from 'axios';
+import { MapPin } from 'lucide-react';
 import LocationMarker from './LocationMarker';
 import AdvancedSearch from './AdvancedSearch';
 import 'leaflet/dist/leaflet.css';
@@ -29,7 +30,7 @@ const selectedBusStopIcon = L.icon({
   iconSize: [40, 40],
   iconAnchor: [20, 40],
   popupAnchor: [0, -40],
-  className: 'selected-station-marker' // Thêm class để style
+  className: 'selected-station-marker'
 });
 
 // Cấu hình các loại bản đồ
@@ -70,6 +71,11 @@ const MapComponent = () => {
   const [routeStations, setRouteStations] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
+  const [nearestStation, setNearestStation] = useState(null);
+  const [infoMessage, setInfoMessage] = useState(null);
+  
+  const mapRef = useRef(null);
+  const markerRefs = useRef({});
 
   // Lấy dữ liệu đường đi từ OSRM
   const getRoute = async (start, end) => {
@@ -98,6 +104,24 @@ const MapComponent = () => {
       }
     }
     return fullPath;
+  };
+
+  // Xử lý khi tìm thấy trạm gần nhất
+  const handleNearestStation = (station) => {
+    setNearestStation(station);
+    setSelectedStation(station);
+    fetchStationRoutes(station);
+    
+    // Mở popup của trạm gần nhất
+    const markerRef = markerRefs.current[station.tram_id];
+    if (markerRef) {
+      markerRef.openPopup();
+    }
+
+    // Hiển thị thông báo
+    const distance = station.distance.toFixed(2);
+    setInfoMessage(`Đã tìm thấy trạm "${station.ten_tram}" cách bạn ${distance}km`);
+    setTimeout(() => setInfoMessage(null), 5000);
   };
 
   // Xử lý thay đổi loại bản đồ
@@ -228,6 +252,7 @@ const MapComponent = () => {
         zoom={13} 
         className="w-full h-full"
         zoomControl={false}
+        ref={mapRef}
       >
         <ZoomControl position="bottomright" />
         
@@ -236,7 +261,10 @@ const MapComponent = () => {
           url={mapLayers[activeMap].url}
         />
 
-        <LocationMarker />
+        <LocationMarker 
+          busStations={busStations}
+          onNearestStation={handleNearestStation}
+        />
         
         <AdvancedSearch 
           busStations={busStations}
@@ -263,10 +291,20 @@ const MapComponent = () => {
             eventHandlers={{
               click: () => handleStationSelect(station),
             }}
+            ref={(ref) => {
+              if (ref) {
+                markerRefs.current[station.tram_id] = ref;
+              }
+            }}
           >
             <Popup>
               <div className="font-sans p-2">
                 <h3 className="font-bold text-lg mb-2">{station.ten_tram}</h3>
+                {nearestStation?.tram_id === station.tram_id && (
+                  <div className="mb-2 text-sm text-green-600 font-medium">
+                    ★ Trạm gần nhất - Cách bạn {station.distance?.toFixed(2)}km
+                  </div>
+                )}
                 <div className="text-sm space-y-1">
                   <p>ID Trạm: {station.tram_id}</p>
                   <p>Trạng thái: {station.trang_thai}</p>
@@ -416,6 +454,16 @@ const MapComponent = () => {
               <path d="M6 18L18 6M6 6l12 12"></path>
             </svg>
           </button>
+        </div>
+      )}
+
+      {/* Thông báo tìm thấy trạm gần nhất */}
+      {infoMessage && (
+        <div className="absolute top-5 left-1/2 transform -translate-x-1/2 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-lg z-[1001] max-w-md">
+          <div className="flex items-center">
+            <MapPin className="h-5 w-5 mr-2" />
+            <span>{infoMessage}</span>
+          </div>
         </div>
       )}
 
